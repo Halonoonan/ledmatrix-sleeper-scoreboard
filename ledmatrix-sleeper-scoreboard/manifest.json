@@ -1,0 +1,35 @@
+{
+  "id": "sleeper-scoreboard",
+  "name": "Sleeper Fantasy Scoreboard",
+  "version": "1.0.0",
+  "author": "Jeff Halonen",
+  "description": "Cycles through every matchup and live score in a Sleeper fantasy football league.",
+  "entry_point": "manager.py",
+  "class_name": "SleeperScoreboardPlugin",
+  "category": "sports",
+  "tags": [
+    "sleeper",
+    "fantasy football",
+    "scoreboard",
+    "NFL"
+  ],
+  "display_modes": [
+    "sleeper-scoreboard"
+  ],
+  "versions": [
+    {
+      "released": "2026-07-24",
+      "version": "1.0.0",
+      "ledmatrix_min_version": "2.0.0"
+    }
+  ],
+  "last_updated": "2026-07-24",
+  "stars": 0,
+  "downloads": 0,
+  "verified": false,
+  "screenshot": "",
+  "config_schema": "config_schema.json",
+  "compatible_versions": [
+    ">=2.0.0"
+  ]
+}
