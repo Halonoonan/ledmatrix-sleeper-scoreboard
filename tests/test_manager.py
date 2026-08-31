@@ -96,6 +96,9 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(header_call[2]["color"], plugin.header_color)
         score_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "1.0"))
         self.assertEqual(score_call[2]["x"], 65)
+        first_call_count = len(plugin.display_manager.calls)
+        plugin.display()
+        self.assertEqual(len(plugin.display_manager.calls), first_call_count)
         plugin.display_manager.calls.clear(); plugin.matchups = []
         plugin.standings = [{"name": "A", "wins": 1, "losses": 0, "ties": 0, "points": 10}]
         plugin.display()
