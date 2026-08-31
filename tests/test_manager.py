@@ -30,7 +30,7 @@ sys.modules.update({
     "src.plugin_system": types.ModuleType("src.plugin_system"),
     "src.plugin_system.base_plugin": base_module,
 })
-path = Path(__file__).parents[1] / "ledmatrix-sleeper-scoreboard" / "manager.py"
+path = Path(__file__).parents[1] / "manager.py"
 spec = importlib.util.spec_from_file_location("sleeper_manager", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
