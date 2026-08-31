@@ -3,7 +3,6 @@
 from collections import defaultdict
 from datetime import datetime, timezone
 import json
-import math
 import os
 import time
 from urllib.error import HTTPError, URLError
@@ -240,7 +239,8 @@ class SleeperScoreboardPlugin(BasePlugin):
                 all_matchups.extend(matchups)
                 all_standings.extend(standings)
                 for start in range(0, len(standings), max(1, self.standings_rows)):
-                    standing_pages.append({"league_label": label, "week": week, "rows": standings[start:start + self.standings_rows]})
+                    standing_pages.append({"league_id": league_id, "league_label": label, "week": week,
+                                           "rows": standings[start:start + self.standings_rows]})
             except Exception as exc:
                 errors[league_id] = str(exc)
                 self.logger.error("Could not load Sleeper league %s: %s", league_id, exc)
@@ -345,6 +345,33 @@ class SleeperScoreboardPlugin(BasePlugin):
         season_type = str(self.nfl_state.get("season_type") or "regular").lower()
         return bool(self.matchups) and season_type in ("regular", "post", "postseason")
 
+    def _rotation_cards(self, include_matchups, include_standings):
+        """Keep every league's matchups and standings in one coherent block."""
+        cards, used_matchups, used_pages = [], set(), set()
+        league_order = list(self.league_ids)
+        for matchup in self.matchups:
+            league_id = matchup.get("league_id")
+            if league_id and league_id not in league_order:
+                league_order.append(league_id)
+        for league_id in league_order:
+            if include_matchups:
+                for index, matchup in enumerate(self.matchups):
+                    if matchup.get("league_id") == league_id:
+                        cards.append(("matchup", index))
+                        used_matchups.add(index)
+            if include_standings:
+                for page, data in enumerate(self.standing_pages):
+                    if data.get("league_id") == league_id:
+                        cards.append(("standings", page))
+                        used_pages.add(page)
+        # Compatibility for cached/test data created before league IDs were
+        # attached to every card.
+        if include_matchups:
+            cards.extend(("matchup", index) for index in range(len(self.matchups)) if index not in used_matchups)
+        if include_standings:
+            cards.extend(("standings", page) for page in range(len(self.standing_pages)) if page not in used_pages)
+        return cards
+
     def display(self, force_clear=False):
         try:
             now = time.monotonic()
@@ -357,22 +384,14 @@ class SleeperScoreboardPlugin(BasePlugin):
             standings_count = available_standings_pages if (
                 self.cycle_standings or (not matchup_count and self.show_standings_when_idle)
             ) else 0
-            # Interleave standings before LEDMatrix's normal 45-second mode
-            # window expires. Appending all standings after six matchups would
-            # make the first standings card arrive at 48 seconds and never show.
-            cards = []
-            standings_page = 0
-            group_size = max(1, math.ceil(matchup_count / max(1, standings_count)))
-            for matchup_index in range(matchup_count):
-                cards.append(("matchup", matchup_index))
-                if (matchup_index + 1) % group_size == 0 and standings_page < standings_count:
-                    cards.append(("standings", standings_page))
-                    standings_page += 1
-            while standings_page < standings_count:
-                cards.append(("standings", standings_page))
-                standings_page += 1
-
-            selected_card = cards[int(elapsed / self.matchup_display_seconds) % len(cards)] if cards else ("idle", 0)
+            cards = self._rotation_cards(bool(matchup_count), bool(standings_count))
+            if standings_count and not any(kind == "standings" for kind, _ in cards):
+                cards.extend(("standings", page) for page in range(standings_count))
+            # Complete the whole Sleeper rotation inside the controller's usual
+            # 45-second mode window. With ten cards this becomes four seconds per
+            # card; smaller leagues retain the configured eight-second duration.
+            card_seconds = min(self.matchup_display_seconds, max(3.0, 40.0 / max(1, len(cards))))
+            selected_card = cards[int(elapsed / card_seconds) % len(cards)] if cards else ("idle", 0)
             if selected_card[0] == "matchup":
                 index = selected_card[1]
                 frame_key = ("matchup", index, self.last_update)
