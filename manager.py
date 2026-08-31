@@ -291,11 +291,6 @@ class SleeperScoreboardPlugin(BasePlugin):
         height = self.display_manager.height
         matchup = self.matchups[index]
         team_a, team_b = matchup["teams"]
-        parts = [matchup.get("league_label", "SLPR")]
-        parts += ([f"W{matchup.get('week', self.current_week)}"] if self.show_week_header else [])
-        parts += ([f"{index + 1}/{len(self.matchups)}"] if self.show_matchup_number else [])
-        # Keep the compact yellow header clear of the first 10x20 score row.
-        self._draw_centered("  ".join(parts) or "SLEEPER", 8, "header", self.header_color)
         # Fixed LED fonts make scores genuinely larger on 96x48 panels.
         for team, y in ((team_a, height * 0.40), (team_b, height * 0.82)):
             score = f"{team['points']:.1f}"
