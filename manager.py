@@ -51,6 +51,8 @@ class SleeperScoreboardPlugin(BasePlugin):
         self.rotation_started = time.monotonic()
         self.error_message = ""
         self.frame_brightness = 1.0
+        self.last_frame_key = None
+        self.last_display_at = 0.0
         self.fonts = {}
         self._load_bdf_fonts()
         self._register_fonts()
@@ -295,19 +297,41 @@ class SleeperScoreboardPlugin(BasePlugin):
 
     def display(self, force_clear=False):
         try:
-            self.display_manager.clear()
-            elapsed = max(0, time.monotonic() - self.rotation_started)
+            now = time.monotonic()
+            elapsed = max(0, now - self.rotation_started)
             self.frame_brightness = 1.0
             if self._matchups_are_relevant():
-                self._matchup_card(int(elapsed / self.matchup_display_seconds) % len(self.matchups))
+                index = int(elapsed / self.matchup_display_seconds) % len(self.matchups)
+                frame_key = ("matchup", index, self.last_update)
             elif self.show_standings_when_idle and self.standings:
                 pages = max(1, (len(self.standings) + self.standings_rows - 1) // self.standings_rows)
-                self._standings_card(int(elapsed / self.matchup_display_seconds) % pages)
+                page = int(elapsed / self.matchup_display_seconds) % pages
+                frame_key = ("standings", page, self.last_update)
+            else:
+                frame_key = ("idle", self.error_message, self.last_update)
+
+            # LEDMatrix calls display() once per second. Clearing an unchanged
+            # panel on every call produces a visible flash, so keep the existing
+            # pixels until the card or data changes. A gap means another plugin
+            # was active and this card must be restored.
+            returning_to_mode = bool(self.last_display_at and now - self.last_display_at > 2.0)
+            self.last_display_at = now
+            if not force_clear and not returning_to_mode and frame_key == self.last_frame_key:
+                return True
+
+            self.last_frame_key = frame_key
+            self.display_manager.clear()
+            if frame_key[0] == "matchup":
+                self._matchup_card(index)
+            elif frame_key[0] == "standings":
+                self._standings_card(page)
             else:
                 self._idle_card()
             self.display_manager.update_display()
+            return True
         except Exception as exc:
             self.logger.error("Sleeper display error: %s", exc, exc_info=True)
+            return False
 
     def validate_config(self):
         if not super().validate_config():
