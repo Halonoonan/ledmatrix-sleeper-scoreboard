@@ -3,6 +3,7 @@
 from collections import defaultdict
 from datetime import datetime, timezone
 import json
+import math
 import os
 import time
 from urllib.error import HTTPError, URLError
@@ -356,14 +357,27 @@ class SleeperScoreboardPlugin(BasePlugin):
             standings_count = available_standings_pages if (
                 self.cycle_standings or (not matchup_count and self.show_standings_when_idle)
             ) else 0
-            total_cards = matchup_count + standings_count
-            card = int(elapsed / self.matchup_display_seconds) % total_cards if total_cards else 0
+            # Interleave standings before LEDMatrix's normal 45-second mode
+            # window expires. Appending all standings after six matchups would
+            # make the first standings card arrive at 48 seconds and never show.
+            cards = []
+            standings_page = 0
+            group_size = max(1, math.ceil(matchup_count / max(1, standings_count)))
+            for matchup_index in range(matchup_count):
+                cards.append(("matchup", matchup_index))
+                if (matchup_index + 1) % group_size == 0 and standings_page < standings_count:
+                    cards.append(("standings", standings_page))
+                    standings_page += 1
+            while standings_page < standings_count:
+                cards.append(("standings", standings_page))
+                standings_page += 1
 
-            if card < matchup_count:
-                index = card
+            selected_card = cards[int(elapsed / self.matchup_display_seconds) % len(cards)] if cards else ("idle", 0)
+            if selected_card[0] == "matchup":
+                index = selected_card[1]
                 frame_key = ("matchup", index, self.last_update)
-            elif standings_count:
-                page = card - matchup_count
+            elif selected_card[0] == "standings":
+                page = selected_card[1]
                 frame_key = ("standings", page, self.last_update)
             else:
                 frame_key = ("idle", self.error_message, self.last_update)

@@ -139,6 +139,17 @@ class PluginTests(unittest.TestCase):
         plugin.display()
         self.assertTrue(any(call[:2] == ("text", "AL STAND") for call in plugin.display_manager.calls))
 
+    def test_standings_are_interleaved_before_display_window_ends(self):
+        plugin = self.make(matchup_display_seconds=8)
+        plugin.nfl_state = {"season_type": "regular"}
+        plugin.matchups = [{"teams": [{"name": "A", "points": 1}, {"name": "B", "points": 2}]} for _ in range(6)]
+        row = {"name": "A", "wins": 0, "losses": 0, "ties": 0, "points": 0}
+        plugin.standing_pages = [{"league_label": f"L{i}", "week": 1, "rows": [row]} for i in range(4)]
+        plugin.standings = [row] * 4
+        plugin.rotation_started = module.time.monotonic() - 16.1
+        plugin.display()
+        self.assertTrue(any(call[:2] == ("text", "L0 STAND") for call in plugin.display_manager.calls))
+
 
 if __name__ == "__main__":
     unittest.main()
