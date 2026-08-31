@@ -44,6 +44,7 @@ class SleeperScoreboardPlugin(BasePlugin):
         self.show_matchup_number = self._boolean(config.get("show_matchup_number", True))
         self.show_projected_points = self._boolean(config.get("show_projected_points", False))
         self.show_standings_when_idle = self._boolean(config.get("show_standings_when_idle", True))
+        self.cycle_standings = self._boolean(config.get("cycle_standings", True))
         self.show_countdown = self._boolean(config.get("show_countdown", True))
         self.standings_rows = self._integer(config.get("standings_rows", 3), 3)
         self.name_max_length = self._integer(config.get("name_max_length", 12), 12)
@@ -348,12 +349,21 @@ class SleeperScoreboardPlugin(BasePlugin):
             now = time.monotonic()
             elapsed = max(0, now - self.rotation_started)
             self.frame_brightness = 1.0
-            if self._matchups_are_relevant():
-                index = int(elapsed / self.matchup_display_seconds) % len(self.matchups)
+            matchup_count = len(self.matchups) if self._matchups_are_relevant() else 0
+            available_standings_pages = len(self.standing_pages)
+            if not available_standings_pages and self.standings:
+                available_standings_pages = max(1, (len(self.standings) + self.standings_rows - 1) // self.standings_rows)
+            standings_count = available_standings_pages if (
+                self.cycle_standings or (not matchup_count and self.show_standings_when_idle)
+            ) else 0
+            total_cards = matchup_count + standings_count
+            card = int(elapsed / self.matchup_display_seconds) % total_cards if total_cards else 0
+
+            if card < matchup_count:
+                index = card
                 frame_key = ("matchup", index, self.last_update)
-            elif self.show_standings_when_idle and self.standings:
-                pages = max(1, len(self.standing_pages))
-                page = int(elapsed / self.matchup_display_seconds) % pages
+            elif standings_count:
+                page = card - matchup_count
                 frame_key = ("standings", page, self.last_update)
             else:
                 frame_key = ("idle", self.error_message, self.last_update)
