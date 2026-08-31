@@ -1,4 +1,4 @@
-# Sleeper Fantasy Scoreboard for ChuckBuilds LEDMatrix
+# Sleeper Fantasy Scoreboard V2 for ChuckBuilds LEDMatrix
 
 Displays **every weekly matchup** in a Sleeper fantasy football league and
 cycles through the live fantasy scores.
@@ -13,29 +13,32 @@ You can change it later from the LEDMatrix web interface.
 
 ## Features
 
-- Retrieves all league users, rosters, team names, and matchups
+- Large fixed-pixel team and score fonts for 96x48 matrices
+- Retrieves all league users, rosters, team names, avatars, and matchups
 - Automatically uses Sleeper's current NFL week
 - Supports manually selecting a week
 - Rotates through every matchup
 - Refreshes scores every 60 seconds by default
+- Retains the last good scores during temporary network failures
+- Shows paged league standings when the current week has no matchups
+- Optionally shows projected points when supplied in matchup data
+- Shows a preseason countdown when Sleeper supplies a season start date
 - Handles long team names
 - Shows byes
 - Uses only Sleeper's public read-only API
 - Requires no Sleeper login or API key
-- Optimized for a 96x48 display
+- Uses conservative text-only drawing calls compatible with the proven LEDMatrix API
+
+Avatar IDs are retained in the data model, but V2 does not render remote images
+because the currently proven ChuckBuilds plugin API exposes text drawing only.
 
 ## Install from GitHub
 
-1. Create a new public GitHub repository, such as `ledmatrix-sleeper-scoreboard`.
-2. Upload every file from this folder to the **top level** of that repository.
-3. Open the LEDMatrix web interface at `http://YOUR-PI-IP:5000`.
-4. Open **Plugin Manager**.
-5. Find **Install from GitHub**.
-6. Paste your repository URL.
-7. Click **Install**.
-8. Enable **Sleeper Fantasy Scoreboard**.
-9. Confirm the league ID and save.
-10. Restart the display service if the plugin does not appear immediately.
+1. Open the LEDMatrix web interface at `http://YOUR-PI-IP:5000`.
+2. Open **Plugin Manager** and choose **Install from GitHub**.
+3. Paste `https://github.com/Halonoonan/ledmatrix-sleeper-scoreboard`.
+4. Install or update the plugin, enable it, confirm the league ID, and save.
+5. Restart the display service if the update does not appear immediately.
 
 ## Manual installation
 
@@ -66,6 +69,7 @@ Restart the LEDMatrix display service afterward.
 - `/v1/league/{league_id}/users`
 - `/v1/league/{league_id}/rosters`
 - `/v1/league/{league_id}/matchups/{week}`
+- Standings are calculated from `/v1/league/{league_id}/rosters`.
 
 ## Troubleshooting
 

@@ -1,118 +1,32 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Sleeper Fantasy Scoreboard Configuration",
-  "description": "Displays all matchups from a Sleeper fantasy football league.",
+  "title": "Sleeper Fantasy Scoreboard V2 Configuration",
+  "description": "Live Sleeper matchups and idle league standings optimized for a 96x48 LED matrix.",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
-    "enabled": {
-      "type": "boolean",
-      "default": true,
-      "description": "Enable or disable the plugin"
-    },
-    "display_duration": {
-      "type": "number",
-      "default": 45,
-      "minimum": 5,
-      "maximum": 600,
-      "description": "How long the LEDMatrix controller keeps this plugin active"
-    },
-    "league_id": {
-      "type": "string",
-      "default": "1386603818250158080",
-      "title": "Sleeper League ID",
-      "description": "The numeric Sleeper league ID"
-    },
-    "week": {
-      "type": "integer",
-      "default": 0,
-      "minimum": 0,
-      "maximum": 25,
-      "title": "Fantasy Week",
-      "description": "Use 0 to automatically use Sleeper's current NFL week"
-    },
-    "matchup_display_seconds": {
-      "type": "number",
-      "default": 7,
-      "minimum": 2,
-      "maximum": 60,
-      "title": "Seconds Per Matchup",
-      "description": "How long each matchup remains on screen"
-    },
-    "update_interval": {
-      "type": "integer",
-      "default": 60,
-      "minimum": 15,
-      "maximum": 3600,
-      "title": "Score Refresh Interval",
-      "description": "How often to refresh Sleeper scores, in seconds"
-    },
-    "show_week_header": {
-      "type": "boolean",
-      "default": true,
-      "description": "Show the current week at the top"
-    },
-    "show_matchup_number": {
-      "type": "boolean",
-      "default": true,
-      "description": "Show the matchup position, such as 2/6"
-    },
-    "name_max_length": {
-      "type": "integer",
-      "default": 16,
-      "minimum": 6,
-      "maximum": 30,
-      "description": "Maximum displayed team-name length"
-    },
-    "header_color": {
-      "type": "array",
-      "items": {
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 255
-      },
-      "minItems": 3,
-      "maxItems": 3,
-      "default": [
-        255,
-        215,
-        0
-      ],
-      "description": "Header RGB color"
-    },
-    "team_color": {
-      "type": "array",
-      "items": {
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 255
-      },
-      "minItems": 3,
-      "maxItems": 3,
-      "default": [
-        255,
-        255,
-        255
-      ],
-      "description": "Team-name RGB color"
-    },
-    "score_color": {
-      "type": "array",
-      "items": {
-        "type": "integer",
-        "minimum": 0,
-        "maximum": 255
-      },
-      "minItems": 3,
-      "maxItems": 3,
-      "default": [
-        0,
-        255,
-        255
-      ],
-      "description": "Fantasy-score RGB color"
-    }
+    "enabled": {"type": "boolean", "default": true, "description": "Enable the plugin"},
+    "display_duration": {"type": "number", "default": 45, "minimum": 5, "maximum": 600, "description": "Seconds LEDMatrix keeps this plugin active"},
+    "league_id": {"type": "string", "pattern": "^[0-9]+$", "default": "1386603818250158080", "title": "Sleeper League ID"},
+    "week": {"type": "integer", "default": 0, "minimum": 0, "maximum": 25, "title": "Fantasy Week", "description": "0 automatically follows Sleeper's current NFL week"},
+    "matchup_display_seconds": {"type": "number", "default": 8, "minimum": 2, "maximum": 60, "title": "Seconds Per Card"},
+    "update_interval": {"type": "integer", "default": 60, "minimum": 15, "maximum": 3600, "title": "Refresh Seconds"},
+    "show_week_header": {"type": "boolean", "default": true, "title": "Show Week"},
+    "show_matchup_number": {"type": "boolean", "default": true, "title": "Show Matchup Position"},
+    "show_projected_points": {"type": "boolean", "default": false, "title": "Show Projections", "description": "Shows projections only when the matchup data supplies them"},
+    "show_standings_when_idle": {"type": "boolean", "default": true, "title": "Standings When Idle"},
+    "show_countdown": {"type": "boolean", "default": true, "title": "Preseason Countdown", "description": "Shows a countdown when Sleeper supplies a future season start date"},
+    "standings_rows": {"type": "integer", "default": 3, "minimum": 1, "maximum": 4, "title": "Standings Rows Per Card"},
+    "name_max_length": {"type": "integer", "default": 12, "minimum": 6, "maximum": 18, "title": "Team Name Length"},
+    "transition_seconds": {"type": "number", "default": 0.25, "minimum": 0, "maximum": 1, "title": "Transition Seconds", "description": "Length of the LED-friendly brightness ramp between cards"},
+    "header_color": {"$ref": "#/definitions/color", "default": [255, 215, 0], "title": "Header Color"},
+    "team_color": {"$ref": "#/definitions/color", "default": [255, 255, 255], "title": "Team Color"},
+    "score_color": {"$ref": "#/definitions/color", "default": [0, 255, 255], "title": "Score Color"},
+    "projection_color": {"$ref": "#/definitions/color", "default": [120, 160, 255], "title": "Projection Color"},
+    "accent_color": {"$ref": "#/definitions/color", "default": [255, 96, 32], "title": "Warning Color"}
   },
-  "required": [
-    "league_id"
-  ]
+  "definitions": {
+    "color": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 255}, "minItems": 3, "maxItems": 3}
+  },
+  "required": ["league_id"]
 }
