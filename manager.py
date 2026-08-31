@@ -17,6 +17,7 @@ except ImportError:  # depends on the Pi image
 
 SLEEPER_API = "https://api.sleeper.app/v1"
 USER_AGENT = "LEDMatrix-Sleeper-Scoreboard/2.0"
+DEFAULT_LEAGUE_IDS = ("1386603818250158080", "1393309596713517056")
 
 
 class SleeperScoreboardPlugin(BasePlugin):
@@ -24,7 +25,18 @@ class SleeperScoreboardPlugin(BasePlugin):
 
     def __init__(self, plugin_id, config, display_manager, cache_manager, plugin_manager):
         super().__init__(plugin_id, config, display_manager, cache_manager, plugin_manager)
-        self.league_id = str(config.get("league_id", "1386603818250158080")).strip()
+        self.league_id = str(config.get("league_id", DEFAULT_LEAGUE_IDS[0])).strip()
+        configured_ids = config.get("league_ids")
+        has_explicit_league_ids = isinstance(configured_ids, (list, tuple)) and bool(configured_ids)
+        if not has_explicit_league_ids:
+            configured_ids = DEFAULT_LEAGUE_IDS
+        self.league_ids = []
+        for value in configured_ids:
+            league_id = str(value).strip()
+            if league_id and league_id not in self.league_ids:
+                self.league_ids.append(league_id)
+        if not has_explicit_league_ids and self.league_id not in self.league_ids:
+            self.league_ids.insert(0, self.league_id)
         self.configured_week = self._integer(config.get("week", 0), 0)
         self.matchup_display_seconds = self._number(config.get("matchup_display_seconds", 8), 8)
         self.update_interval = self._integer(config.get("update_interval", 60), 60)
@@ -46,7 +58,8 @@ class SleeperScoreboardPlugin(BasePlugin):
         self.accent_color = self._color(config.get("accent_color"), (255, 96, 32))
 
         self.current_week = self.configured_week or 1
-        self.matchups, self.standings, self.nfl_state = [], [], {}
+        self.matchups, self.standings, self.standing_pages, self.nfl_state = [], [], [], {}
+        self.league_errors = {}
         self.last_update = self.last_attempt = 0.0
         self.rotation_started = time.monotonic()
         self.error_message = ""
@@ -56,7 +69,7 @@ class SleeperScoreboardPlugin(BasePlugin):
         self.fonts = {}
         self._load_bdf_fonts()
         self._register_fonts()
-        self.logger.info("Sleeper Scoreboard V2 initialized for league %s", self.league_id)
+        self.logger.info("Sleeper Scoreboard V2 initialized for leagues %s", ", ".join(self.league_ids))
 
     @staticmethod
     def _boolean(value):
@@ -141,6 +154,15 @@ class SleeperScoreboardPlugin(BasePlugin):
         initials = "".join(word[0] for word in clean.split() if word)
         return (initials if 1 < len(initials) <= self.name_max_length else clean[:self.name_max_length]).upper()
 
+    @staticmethod
+    def _league_label(name, league_id):
+        clean = " ".join(str(name or "").split())
+        words = [word for word in clean.split() if word]
+        initials = "".join(word[0] for word in words)
+        if 1 < len(initials) <= 6:
+            return initials.upper()
+        return (clean[:6] if clean else f"L{league_id[-3:]}").upper()
+
     def _team(self, roster, users_by_id):
         metadata = roster.get("metadata") or {}
         user = users_by_id.get(roster.get("owner_id"), {})
@@ -181,7 +203,7 @@ class SleeperScoreboardPlugin(BasePlugin):
                 matchups.append({"matchup_id": matchup_id, "teams": teams[:2]})
         return matchups
 
-    def _build_standings(self, rosters, teams_by_roster):
+    def _build_standings(self, rosters, teams_by_roster, league_id=None, league_label=None):
         result = []
         for roster in rosters:
             roster_id = self._integer(roster.get("roster_id"), 0)
@@ -191,21 +213,44 @@ class SleeperScoreboardPlugin(BasePlugin):
                 "wins": self._integer(settings.get("wins"), 0), "losses": self._integer(settings.get("losses"), 0),
                 "ties": self._integer(settings.get("ties"), 0),
                 "points": self._number(settings.get("fpts"), 0) + self._number(settings.get("fpts_decimal"), 0) / 100,
+                "league_id": league_id,
+                "league_label": league_label,
             })
         return sorted(result, key=lambda row: (-row["wins"], row["losses"], -row["points"], row["name"]))
 
     def _fetch_data(self):
         state = self._get_json("/state/nfl")
         week = self._resolve_week(state)
-        users = self._get_json(f"/league/{self.league_id}/users")
-        rosters = self._get_json(f"/league/{self.league_id}/rosters")
-        rows = self._get_json(f"/league/{self.league_id}/matchups/{week}")
-        users_by_id = {user.get("user_id"): user for user in users}
-        teams = {self._integer(r.get("roster_id"), 0): self._team(r, users_by_id) for r in rosters}
+        all_matchups, all_standings, standing_pages, errors = [], [], [], {}
+        for league_id in self.league_ids:
+            try:
+                league = self._get_json(f"/league/{league_id}")
+                users = self._get_json(f"/league/{league_id}/users")
+                rosters = self._get_json(f"/league/{league_id}/rosters")
+                rows = self._get_json(f"/league/{league_id}/matchups/{week}")
+                label = self._league_label(league.get("name"), league_id)
+                users_by_id = {user.get("user_id"): user for user in users}
+                teams = {self._integer(r.get("roster_id"), 0): self._team(r, users_by_id) for r in rosters}
+                matchups = self._build_matchups(rows, teams)
+                for matchup in matchups:
+                    matchup.update(league_id=league_id, league_label=label, week=week)
+                standings = self._build_standings(rosters, teams, league_id, label)
+                all_matchups.extend(matchups)
+                all_standings.extend(standings)
+                for start in range(0, len(standings), max(1, self.standings_rows)):
+                    standing_pages.append({"league_label": label, "week": week, "rows": standings[start:start + self.standings_rows]})
+            except Exception as exc:
+                errors[league_id] = str(exc)
+                self.logger.error("Could not load Sleeper league %s: %s", league_id, exc)
+        if not all_matchups and not all_standings:
+            raise RuntimeError("No configured Sleeper leagues could be loaded")
         # Atomic assignment retains the last good screen if a request fails.
         self.nfl_state, self.current_week = state, week
-        self.matchups, self.standings = self._build_matchups(rows, teams), self._build_standings(rosters, teams)
-        self.last_update, self.error_message, self.rotation_started = time.time(), "", time.monotonic()
+        self.matchups, self.standings, self.standing_pages = all_matchups, all_standings, standing_pages
+        self.league_errors = errors
+        self.last_update = time.time()
+        self.error_message = f"{len(errors)} LEAGUE OFFLINE" if errors else ""
+        self.rotation_started = time.monotonic()
 
     def update(self):
         now = time.time()
@@ -244,8 +289,11 @@ class SleeperScoreboardPlugin(BasePlugin):
 
     def _matchup_card(self, index):
         height = self.display_manager.height
-        team_a, team_b = self.matchups[index]["teams"]
-        parts = ([f"W{self.current_week}"] if self.show_week_header else []) + ([f"{index + 1}/{len(self.matchups)}"] if self.show_matchup_number else [])
+        matchup = self.matchups[index]
+        team_a, team_b = matchup["teams"]
+        parts = [matchup.get("league_label", "SLPR")]
+        parts += ([f"W{matchup.get('week', self.current_week)}"] if self.show_week_header else [])
+        parts += ([f"{index + 1}/{len(self.matchups)}"] if self.show_matchup_number else [])
         # BDF y coordinates are baselines. A baseline of 5 clips the top of the
         # 7x13 header font; 13 keeps the full glyph inside a 48px panel.
         self._draw_centered("  ".join(parts) or "SLEEPER", 13, "header", self.header_color)
@@ -263,10 +311,16 @@ class SleeperScoreboardPlugin(BasePlugin):
             self._draw_centered(f"P {values}", height - 2, "small", self.projection_color)
 
     def _standings_card(self, page):
-        rows, height = max(1, self.standings_rows), self.display_manager.height
-        start = page * rows
-        selected = self.standings[start:start + rows]
-        self._draw_centered(f"W{self.current_week} STANDINGS", 5, "header", self.header_color)
+        height = self.display_manager.height
+        if self.standing_pages:
+            page_data = self.standing_pages[page]
+        else:
+            start = page * max(1, self.standings_rows)
+            page_data = {"league_label": "SLPR", "week": self.current_week,
+                         "rows": self.standings[start:start + self.standings_rows]}
+        selected = page_data["rows"]
+        start = sum(len(item["rows"]) for item in self.standing_pages[:page] if item["league_label"] == page_data["league_label"])
+        self._draw_centered(f"{page_data['league_label']} STAND", 13, "header", self.header_color)
         step = max(9, (height - 8) // max(1, len(selected)))
         for offset, row in enumerate(selected):
             record = f"{row['wins']}-{row['losses']}" + (f"-{row['ties']}" if row["ties"] else "")
@@ -304,7 +358,7 @@ class SleeperScoreboardPlugin(BasePlugin):
                 index = int(elapsed / self.matchup_display_seconds) % len(self.matchups)
                 frame_key = ("matchup", index, self.last_update)
             elif self.show_standings_when_idle and self.standings:
-                pages = max(1, (len(self.standings) + self.standings_rows - 1) // self.standings_rows)
+                pages = max(1, len(self.standing_pages))
                 page = int(elapsed / self.matchup_display_seconds) % pages
                 frame_key = ("standings", page, self.last_update)
             else:
@@ -338,6 +392,7 @@ class SleeperScoreboardPlugin(BasePlugin):
             return False
         checks = (
             (self.league_id.isdigit(), "league_id must contain only digits"),
+            (bool(self.league_ids) and all(value.isdigit() for value in self.league_ids), "league_ids must contain numeric Sleeper league IDs"),
             (self.configured_week in range(26), "week must be from 0 through 25"),
             (self.matchup_display_seconds >= 2, "matchup_display_seconds must be at least 2"),
             (self.update_interval >= 15, "update_interval must be at least 15 seconds"),
@@ -353,9 +408,9 @@ class SleeperScoreboardPlugin(BasePlugin):
 
     def get_info(self):
         info = super().get_info()
-        info.update({"league_id": self.league_id, "week": self.current_week, "matchup_count": len(self.matchups),
+        info.update({"league_id": self.league_id, "league_ids": self.league_ids, "week": self.current_week, "matchup_count": len(self.matchups),
                      "standings_count": len(self.standings), "last_update": self.last_update,
-                     "last_attempt": self.last_attempt, "error": self.error_message})
+                     "last_attempt": self.last_attempt, "league_errors": self.league_errors, "error": self.error_message})
         return info
 
     def cleanup(self):
