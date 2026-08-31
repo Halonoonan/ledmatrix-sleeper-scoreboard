@@ -18,7 +18,7 @@
     "show_countdown": {"type": "boolean", "default": true, "title": "Preseason Countdown", "description": "Shows a countdown when Sleeper supplies a future season start date"},
     "standings_rows": {"type": "integer", "default": 3, "minimum": 1, "maximum": 4, "title": "Standings Rows Per Card"},
     "name_max_length": {"type": "integer", "default": 12, "minimum": 6, "maximum": 18, "title": "Team Name Length"},
-    "transition_seconds": {"type": "number", "default": 0.25, "minimum": 0, "maximum": 1, "title": "Transition Seconds", "description": "Length of the LED-friendly brightness ramp between cards"},
+    "transition_seconds": {"type": "number", "default": 0, "minimum": 0, "maximum": 1, "title": "Transition Seconds", "description": "Compatibility setting; constant brightness is used to prevent blinking at normal LEDMatrix frame rates"},
     "header_color": {"$ref": "#/definitions/color", "default": [255, 215, 0], "title": "Header Color"},
     "team_color": {"$ref": "#/definitions/color", "default": [255, 255, 255], "title": "Team Color"},
     "score_color": {"$ref": "#/definitions/color", "default": [0, 255, 255], "title": "Score Color"},

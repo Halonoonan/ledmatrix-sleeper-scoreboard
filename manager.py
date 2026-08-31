@@ -35,7 +35,10 @@ class SleeperScoreboardPlugin(BasePlugin):
         self.show_countdown = self._boolean(config.get("show_countdown", True))
         self.standings_rows = self._integer(config.get("standings_rows", 3), 3)
         self.name_max_length = self._integer(config.get("name_max_length", 12), 12)
-        self.transition_seconds = self._number(config.get("transition_seconds", 0.25), 0.25)
+        # Retained for compatibility with early V2 configs. The one-frame-per-
+        # second display loop cannot render fades smoothly, so V2.0.1 keeps the
+        # screen at constant brightness.
+        self.transition_seconds = self._number(config.get("transition_seconds", 0), 0)
         self.header_color = self._color(config.get("header_color"), (255, 215, 0))
         self.team_color = self._color(config.get("team_color"), (255, 255, 255))
         self.score_color = self._color(config.get("score_color"), (0, 255, 255))
@@ -241,7 +244,9 @@ class SleeperScoreboardPlugin(BasePlugin):
         height = self.display_manager.height
         team_a, team_b = self.matchups[index]["teams"]
         parts = ([f"W{self.current_week}"] if self.show_week_header else []) + ([f"{index + 1}/{len(self.matchups)}"] if self.show_matchup_number else [])
-        self._draw_centered("  ".join(parts) or "SLEEPER", 5, "header", self.header_color)
+        # BDF y coordinates are baselines. A baseline of 5 clips the top of the
+        # 7x13 header font; 13 keeps the full glyph inside a 48px panel.
+        self._draw_centered("  ".join(parts) or "SLEEPER", 13, "header", self.header_color)
         # Fixed LED fonts make scores genuinely larger on 96x48 panels.
         for team, y in ((team_a, height * 0.40), (team_b, height * 0.82)):
             score = f"{team['points']:.1f}"
@@ -292,13 +297,7 @@ class SleeperScoreboardPlugin(BasePlugin):
         try:
             self.display_manager.clear()
             elapsed = max(0, time.monotonic() - self.rotation_started)
-            phase = elapsed % self.matchup_display_seconds
-            if self.transition_seconds:
-                # A short brightness ramp avoids harsh full-panel cuts without
-                # requiring a high-FPS canvas API on older LEDMatrix releases.
-                self.frame_brightness = min(1.0, 0.35 + 0.65 * phase / self.transition_seconds)
-            else:
-                self.frame_brightness = 1.0
+            self.frame_brightness = 1.0
             if self._matchups_are_relevant():
                 self._matchup_card(int(elapsed / self.matchup_display_seconds) % len(self.matchups))
             elif self.show_standings_when_idle and self.standings:
