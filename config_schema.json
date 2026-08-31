@@ -16,6 +16,7 @@
     "show_matchup_number": {"type": "boolean", "default": true, "title": "Show Matchup Position"},
     "show_projected_points": {"type": "boolean", "default": false, "title": "Show Projections", "description": "Shows projections only when the matchup data supplies them"},
     "show_standings_when_idle": {"type": "boolean", "default": true, "title": "Standings When Idle"},
+    "cycle_standings": {"type": "boolean", "default": true, "title": "Cycle Overall Standings", "description": "Show each league's overall standings after its matchup cards"},
     "show_countdown": {"type": "boolean", "default": true, "title": "Preseason Countdown", "description": "Shows a countdown when Sleeper supplies a future season start date"},
     "standings_rows": {"type": "integer", "default": 3, "minimum": 1, "maximum": 4, "title": "Standings Rows Per Card"},
     "name_max_length": {"type": "integer", "default": 12, "minimum": 6, "maximum": 18, "title": "Team Name Length"},

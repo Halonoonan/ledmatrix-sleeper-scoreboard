@@ -129,6 +129,16 @@ class PluginTests(unittest.TestCase):
         self.assertEqual([row["league_label"] for row in plugin.matchups], ["AL", "BL"])
         self.assertEqual(len(plugin.standing_pages), 2)
 
+    def test_standings_cycle_after_matchups(self):
+        plugin = self.make(matchup_display_seconds=8)
+        plugin.nfl_state = {"season_type": "regular"}
+        plugin.matchups = [{"teams": [{"name": "A", "points": 1}, {"name": "B", "points": 2}]}]
+        plugin.standings = [{"name": "A", "wins": 1, "losses": 0, "ties": 0, "points": 1}]
+        plugin.standing_pages = [{"league_label": "AL", "week": 1, "rows": plugin.standings}]
+        plugin.rotation_started = module.time.monotonic() - 8.1
+        plugin.display()
+        self.assertTrue(any(call[:2] == ("text", "AL STAND") for call in plugin.display_manager.calls))
+
 
 if __name__ == "__main__":
     unittest.main()
