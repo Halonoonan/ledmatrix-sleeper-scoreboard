@@ -91,7 +91,7 @@ class PluginTests(unittest.TestCase):
         plugin.nfl_state = {"season_type": "regular"}
         plugin.display()
         self.assertTrue(any(call[:2] == ("text", "1.0") for call in plugin.display_manager.calls))
-        header_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "W1  1/1"))
+        header_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "SLPR  W1  1/1"))
         self.assertEqual(header_call[2]["y"], 13)
         self.assertEqual(header_call[2]["color"], plugin.header_color)
         score_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "1.0"))
@@ -102,10 +102,33 @@ class PluginTests(unittest.TestCase):
         plugin.display_manager.calls.clear(); plugin.matchups = []
         plugin.standings = [{"name": "A", "wins": 1, "losses": 0, "ties": 0, "points": 10}]
         plugin.display()
-        self.assertTrue(any("STANDINGS" in call[1] for call in plugin.display_manager.calls if call[0] == "text"))
+        self.assertTrue(any("STAND" in call[1] for call in plugin.display_manager.calls if call[0] == "text"))
         plugin.display_manager.calls.clear(); plugin.standings = []
         plugin.display()
         self.assertTrue(any(call[:2] == ("text", "NO MATCHUPS") for call in plugin.display_manager.calls))
+
+    def test_fetches_and_labels_multiple_leagues(self):
+        plugin = self.make(league_ids=["111", "222"])
+
+        def response(path):
+            if path == "/state/nfl":
+                return {"week": 2, "season_type": "regular"}
+            league_id = path.split("/")[2]
+            if path == f"/league/{league_id}":
+                return {"name": "Alpha League" if league_id == "111" else "Beta League"}
+            if path.endswith("/users"):
+                return [{"user_id": f"u{league_id}", "display_name": f"Team {league_id}"}]
+            if path.endswith("/rosters"):
+                return [{"roster_id": 1, "owner_id": f"u{league_id}", "settings": {"wins": 1}}]
+            if path.endswith("/matchups/2"):
+                return [{"matchup_id": 1, "roster_id": 1, "points": 10}]
+            raise AssertionError(path)
+
+        with patch.object(plugin, "_get_json", side_effect=response):
+            plugin._fetch_data()
+        self.assertEqual(len(plugin.matchups), 2)
+        self.assertEqual([row["league_label"] for row in plugin.matchups], ["AL", "BL"])
+        self.assertEqual(len(plugin.standing_pages), 2)
 
 
 if __name__ == "__main__":

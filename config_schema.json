@@ -8,6 +8,7 @@
     "enabled": {"type": "boolean", "default": true, "description": "Enable the plugin"},
     "display_duration": {"type": "number", "default": 45, "minimum": 5, "maximum": 600, "description": "Seconds LEDMatrix keeps this plugin active"},
     "league_id": {"type": "string", "pattern": "^[0-9]+$", "default": "1386603818250158080", "title": "Sleeper League ID"},
+    "league_ids": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "minItems": 1, "uniqueItems": true, "default": ["1386603818250158080", "1393309596713517056"], "title": "Sleeper League IDs", "description": "Every league whose matchups and standings should cycle on the display"},
     "week": {"type": "integer", "default": 0, "minimum": 0, "maximum": 25, "title": "Fantasy Week", "description": "0 automatically follows Sleeper's current NFL week"},
     "matchup_display_seconds": {"type": "number", "default": 8, "minimum": 2, "maximum": 60, "title": "Seconds Per Card"},
     "update_interval": {"type": "integer", "default": 60, "minimum": 15, "maximum": 3600, "title": "Refresh Seconds"},

@@ -5,16 +5,19 @@ cycles through the live fantasy scores.
 
 ## Included configuration
 
-The default league ID is:
+The default league IDs are:
 
-`1386603818250158080`
+- `1386603818250158080`
+- `1393309596713517056`
 
-You can change it later from the LEDMatrix web interface.
+You can change the `league_ids` list later from the LEDMatrix web interface.
+The original `league_id` setting remains supported for V1 compatibility.
 
 ## Features
 
 - Large fixed-pixel team and score fonts for 96x48 matrices
 - Retrieves all league users, rosters, team names, avatars, and matchups
+- Cycles through both leagues and labels each league in the header
 - Automatically uses Sleeper's current NFL week
 - Supports manually selecting a week
 - Rotates through every matchup
