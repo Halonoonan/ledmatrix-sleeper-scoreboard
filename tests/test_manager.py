@@ -91,9 +91,8 @@ class PluginTests(unittest.TestCase):
         plugin.nfl_state = {"season_type": "regular"}
         plugin.display()
         self.assertTrue(any(call[:2] == ("text", "1.0") for call in plugin.display_manager.calls))
-        header_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "SLPR  W1  1/1"))
-        self.assertEqual(header_call[2]["y"], 13)
-        self.assertEqual(header_call[2]["color"], plugin.header_color)
+        self.assertFalse(any(call[0] == "text" and call[2]["color"] == plugin.header_color
+                             for call in plugin.display_manager.calls))
         score_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "1.0"))
         self.assertEqual(score_call[2]["x"], 65)
         first_call_count = len(plugin.display_manager.calls)
