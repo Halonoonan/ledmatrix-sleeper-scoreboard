@@ -91,6 +91,8 @@ class PluginTests(unittest.TestCase):
         plugin.nfl_state = {"season_type": "regular"}
         plugin.display()
         self.assertTrue(any(call[:2] == ("text", "1.0") for call in plugin.display_manager.calls))
+        score_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "1.0"))
+        self.assertEqual(score_call[2]["x"], 65)
         plugin.display_manager.calls.clear(); plugin.matchups = []
         plugin.standings = [{"name": "A", "wins": 1, "losses": 0, "ties": 0, "points": 10}]
         plugin.display()

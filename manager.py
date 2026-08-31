@@ -244,8 +244,13 @@ class SleeperScoreboardPlugin(BasePlugin):
         self._draw_centered("  ".join(parts) or "SLEEPER", 5, "header", self.header_color)
         # Fixed LED fonts make scores genuinely larger on 96x48 panels.
         for team, y in ((team_a, height * 0.40), (team_b, height * 0.82)):
-            self._draw(team["name"], 2, y, "team", self.team_color)
-            self._draw(f"{team['points']:.1f}", self.display_manager.width - 25, y, "score", self.score_color)
+            score = f"{team['points']:.1f}"
+            # 10x20.bdf uses ten horizontal pixels per character. Right-aligning
+            # from the measured width keeps scores such as 123.4 on a 96px panel.
+            score_x = max(1, self.display_manager.width - len(score) * 10 - 1)
+            available_name_chars = max(2, (score_x - 4) // 8)
+            self._draw(team["name"][:available_name_chars], 2, y, "team", self.team_color)
+            self._draw(score, score_x, y, "score", self.score_color)
         if self.show_projected_points and any(t.get("projected") is not None for t in (team_a, team_b)):
             values = " / ".join("--" if t.get("projected") is None else f"{t['projected']:.1f}" for t in (team_a, team_b))
             self._draw_centered(f"P {values}", height - 2, "small", self.projection_color)
