@@ -50,7 +50,7 @@ class PluginManager:
 
 class PluginTests(unittest.TestCase):
     def make(self, **config):
-        values = {"league_id": "123", **config}
+        values = {"league_id": "123", "enable_big_plays": False, **config}
         return module.SleeperScoreboardPlugin("sleeper", values, Display(), None, PluginManager())
 
     def test_matchups_names_projections_bye_and_standings(self):
@@ -155,6 +155,22 @@ class PluginTests(unittest.TestCase):
         plugin.rotation_started = module.time.monotonic() - 12.1
         plugin.display()
         self.assertTrue(any(call[:2] == ("text", "L1 STAND") for call in plugin.display_manager.calls))
+
+    def test_starter_point_jump_queues_and_displays_big_play(self):
+        plugin = self.make(enable_big_plays=True, league_ids=["1"], big_play_threshold=5)
+        teams = {1: {"name": "WOLVES"}}
+        first = [{"roster_id": 1, "starters": ["p1"], "players_points": {"p1": 2, "bench": 0}}]
+        second = [{"roster_id": 1, "starters": ["p1"], "players_points": {"p1": 8, "bench": 20}}]
+        plugin.player_names = {"p1": "Test Runner", "bench": "Bench Star"}
+        plugin._detect_big_plays(first, teams, "1", "AL", 1)
+        plugin._detect_big_plays(second, teams, "1", "AL", 1)
+        self.assertEqual(len(plugin.big_play_queue), 1)
+        self.assertEqual(plugin.big_play_queue[0]["points"], 6)
+        plugin.display()
+        texts = [call[1] for call in plugin.display_manager.calls if call[0] == "text"]
+        self.assertIn("BIG PLAY", texts)
+        self.assertIn("TEST RUNNER", texts)
+        self.assertIn("+6.0 PTS", texts)
 
 
 if __name__ == "__main__":

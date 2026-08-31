@@ -40,6 +40,10 @@ class SleeperScoreboardPlugin(BasePlugin):
         self.configured_week = self._integer(config.get("week", 0), 0)
         self.matchup_display_seconds = self._number(config.get("matchup_display_seconds", 8), 8)
         self.update_interval = self._integer(config.get("update_interval", 60), 60)
+        self.big_play_refresh_interval = self._integer(config.get("big_play_refresh_interval", 15), 15)
+        self.enable_big_plays = self._boolean(config.get("enable_big_plays", True))
+        self.big_play_threshold = self._number(config.get("big_play_threshold", 5), 5)
+        self.big_play_display_seconds = self._number(config.get("big_play_display_seconds", 8), 8)
         self.show_week_header = self._boolean(config.get("show_week_header", True))
         self.show_matchup_number = self._boolean(config.get("show_matchup_number", True))
         self.show_projected_points = self._boolean(config.get("show_projected_points", False))
@@ -61,6 +65,13 @@ class SleeperScoreboardPlugin(BasePlugin):
         self.current_week = self.configured_week or 1
         self.matchups, self.standings, self.standing_pages, self.nfl_state = [], [], [], {}
         self.league_errors = {}
+        self.player_names = {}
+        self.player_names_attempted = False
+        self.previous_player_points = {}
+        self.player_points_week = None
+        self.big_play_queue = []
+        self.active_big_play = None
+        self.big_play_until = 0.0
         self.last_update = self.last_attempt = 0.0
         self.rotation_started = time.monotonic()
         self.error_message = ""
@@ -204,6 +215,50 @@ class SleeperScoreboardPlugin(BasePlugin):
                 matchups.append({"matchup_id": matchup_id, "teams": teams[:2]})
         return matchups
 
+    def _load_player_names(self):
+        if self.player_names or self.player_names_attempted or not self.enable_big_plays:
+            return
+        self.player_names_attempted = True
+        players = self._get_json("/players/nfl?active=true")
+        self.player_names = {
+            str(player_id): " ".join(
+                part for part in (player.get("first_name"), player.get("last_name")) if part
+            ) or str(player_id)
+            for player_id, player in players.items()
+        }
+
+    def _detect_big_plays(self, rows, teams_by_roster, league_id, league_label, week):
+        if not self.enable_big_plays:
+            return
+        if self.player_points_week != week:
+            self.previous_player_points = {}
+            self.player_points_week = week
+        for row in rows or []:
+            roster_id = self._integer(row.get("roster_id"), 0)
+            team = teams_by_roster.get(roster_id, {"name": f"ROSTER {roster_id}"})
+            starter_ids = {str(player_id) for player_id in (row.get("starters") or [])}
+            points = row.get("players_points") or row.get("starters_points") or {}
+            if not isinstance(points, dict):
+                continue
+            for player_id, raw_points in points.items():
+                player_id = str(player_id)
+                if starter_ids and player_id not in starter_ids:
+                    continue
+                current = self._number(raw_points, 0)
+                key = (league_id, roster_id, player_id)
+                previous = self.previous_player_points.get(key)
+                self.previous_player_points[key] = current
+                if previous is None:
+                    continue
+                delta = current - previous
+                if delta >= self.big_play_threshold:
+                    self.big_play_queue.append({
+                        "league_label": league_label,
+                        "team_name": team["name"],
+                        "player_name": self.player_names.get(player_id, player_id).upper(),
+                        "points": delta,
+                    })
+
     def _build_standings(self, rosters, teams_by_roster, league_id=None, league_label=None):
         result = []
         for roster in rosters:
@@ -222,6 +277,11 @@ class SleeperScoreboardPlugin(BasePlugin):
     def _fetch_data(self):
         state = self._get_json("/state/nfl")
         week = self._resolve_week(state)
+        if self.enable_big_plays and not self.player_names:
+            try:
+                self._load_player_names()
+            except Exception as exc:
+                self.logger.warning("Could not load Sleeper player names: %s", exc)
         all_matchups, all_standings, standing_pages, errors = [], [], [], {}
         for league_id in self.league_ids:
             try:
@@ -232,6 +292,7 @@ class SleeperScoreboardPlugin(BasePlugin):
                 label = self._league_label(league.get("name"), league_id)
                 users_by_id = {user.get("user_id"): user for user in users}
                 teams = {self._integer(r.get("roster_id"), 0): self._team(r, users_by_id) for r in rosters}
+                self._detect_big_plays(rows, teams, league_id, label, week)
                 matchups = self._build_matchups(rows, teams)
                 for matchup in matchups:
                     matchup.update(league_id=league_id, league_label=label, week=week)
@@ -250,13 +311,16 @@ class SleeperScoreboardPlugin(BasePlugin):
         self.nfl_state, self.current_week = state, week
         self.matchups, self.standings, self.standing_pages = all_matchups, all_standings, standing_pages
         self.league_errors = errors
+        first_load = not self.last_update
         self.last_update = time.time()
         self.error_message = f"{len(errors)} LEAGUE OFFLINE" if errors else ""
-        self.rotation_started = time.monotonic()
+        if first_load:
+            self.rotation_started = time.monotonic()
 
     def update(self):
         now = time.time()
-        if self.last_attempt and now - self.last_attempt < self.update_interval:
+        refresh_interval = min(self.update_interval, self.big_play_refresh_interval) if self.enable_big_plays else self.update_interval
+        if self.last_attempt and now - self.last_attempt < refresh_interval:
             return
         self.last_attempt = now
         try:
@@ -341,6 +405,15 @@ class SleeperScoreboardPlugin(BasePlugin):
         if self.error_message:
             self._draw_centered(self.error_message, height * 0.86, "small", self.accent_color)
 
+    def _big_play_card(self, alert):
+        self._draw("BIG PLAY", 27, 7, "small", self.header_color)
+        self._draw(alert["player_name"][:18], 3, 17, "small", self.team_color)
+        context = f"{alert['league_label']} {alert['team_name']}"[:18]
+        self._draw(context, 3, 27, "small", self.projection_color)
+        points = f"+{alert['points']:.1f} PTS"
+        points_x = max(1, (self.display_manager.width - len(points) * 10) // 2)
+        self._draw(points, points_x, 46, "score", self.score_color)
+
     def _matchups_are_relevant(self):
         season_type = str(self.nfl_state.get("season_type") or "regular").lower()
         return bool(self.matchups) and season_type in ("regular", "post", "postseason")
@@ -377,6 +450,26 @@ class SleeperScoreboardPlugin(BasePlugin):
             now = time.monotonic()
             elapsed = max(0, now - self.rotation_started)
             self.frame_brightness = 1.0
+            if self.active_big_play and now >= self.big_play_until:
+                self.active_big_play = None
+            if not self.active_big_play and self.big_play_queue:
+                self.active_big_play = self.big_play_queue.pop(0)
+                self.big_play_until = now + self.big_play_display_seconds
+
+            if self.active_big_play:
+                alert = self.active_big_play
+                frame_key = ("big_play", alert["league_label"], alert["team_name"],
+                             alert["player_name"], alert["points"])
+                returning_to_mode = bool(self.last_display_at and now - self.last_display_at > 2.0)
+                self.last_display_at = now
+                if not force_clear and not returning_to_mode and frame_key == self.last_frame_key:
+                    return True
+                self.last_frame_key = frame_key
+                self.display_manager.clear()
+                self._big_play_card(alert)
+                self.display_manager.update_display()
+                return True
+
             matchup_count = len(self.matchups) if self._matchups_are_relevant() else 0
             available_standings_pages = len(self.standing_pages)
             if not available_standings_pages and self.standings:
@@ -433,6 +526,9 @@ class SleeperScoreboardPlugin(BasePlugin):
             (self.configured_week in range(26), "week must be from 0 through 25"),
             (self.matchup_display_seconds >= 2, "matchup_display_seconds must be at least 2"),
             (self.update_interval >= 15, "update_interval must be at least 15 seconds"),
+            (self.big_play_refresh_interval >= 10, "big_play_refresh_interval must be at least 10 seconds"),
+            (self.big_play_threshold >= 1, "big_play_threshold must be at least 1 point"),
+            (3 <= self.big_play_display_seconds <= 30, "big_play_display_seconds must be from 3 through 30"),
             (1 <= self.standings_rows <= 4, "standings_rows must be from 1 through 4"),
             (6 <= self.name_max_length <= 18, "name_max_length must be from 6 through 18"),
             (0 <= self.transition_seconds <= 1, "transition_seconds must be from 0 through 1"),
@@ -447,7 +543,8 @@ class SleeperScoreboardPlugin(BasePlugin):
         info = super().get_info()
         info.update({"league_id": self.league_id, "league_ids": self.league_ids, "week": self.current_week, "matchup_count": len(self.matchups),
                      "standings_count": len(self.standings), "last_update": self.last_update,
-                     "last_attempt": self.last_attempt, "league_errors": self.league_errors, "error": self.error_message})
+                     "last_attempt": self.last_attempt, "league_errors": self.league_errors,
+                     "queued_big_plays": len(self.big_play_queue), "error": self.error_message})
         return info
 
     def cleanup(self):

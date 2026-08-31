@@ -25,6 +25,8 @@ The original `league_id` setting remains supported for V1 compatibility.
 - Retains the last good scores during temporary network failures
 - Shows paged league standings when the current week has no matchups
 - Cycles each league's overall standings after the matchup cards
+- Detects starter scoring jumps and shows fantasy big-play alerts
+- Refreshes big-play data every 15 seconds by default
 - Optionally shows projected points when supplied in matchup data
 - Shows a preseason countdown when Sleeper supplies a season start date
 - Handles long team names
