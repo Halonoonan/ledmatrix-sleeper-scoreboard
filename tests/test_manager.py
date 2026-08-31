@@ -92,7 +92,7 @@ class PluginTests(unittest.TestCase):
         plugin.display()
         self.assertTrue(any(call[:2] == ("text", "1.0") for call in plugin.display_manager.calls))
         header_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "SLPR  W1  1/1"))
-        self.assertEqual(header_call[2]["y"], 13)
+        self.assertEqual(header_call[2]["y"], 8)
         self.assertEqual(header_call[2]["color"], plugin.header_color)
         score_call = next(call for call in plugin.display_manager.calls if call[:2] == ("text", "1.0"))
         self.assertEqual(score_call[2]["x"], 65)

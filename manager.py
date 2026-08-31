@@ -102,7 +102,7 @@ class SleeperScoreboardPlugin(BasePlugin):
         if font_manager is None:
             return
         definitions = (
-            ("header", 7, self.header_color), ("team", 10, self.team_color),
+            ("header", 5, self.header_color), ("team", 10, self.team_color),
             ("score", 14, self.score_color), ("small", 6, self.projection_color),
         )
         for key, size, color in definitions:
@@ -118,7 +118,7 @@ class SleeperScoreboardPlugin(BasePlugin):
         if freetype is None:
             return
         choices = {
-            "header": ("7x13B.bdf", "6x10.bdf", "6x9.bdf"),
+            "header": ("5x7.bdf", "4x6.bdf", "6x9.bdf"),
             "team": ("8x13B.bdf", "7x14B.bdf", "6x13B.bdf"),
             "score": ("10x20.bdf", "9x18B.bdf", "8x13B.bdf"),
             "small": ("5x7.bdf", "4x6.bdf", "6x9.bdf"),
@@ -294,9 +294,8 @@ class SleeperScoreboardPlugin(BasePlugin):
         parts = [matchup.get("league_label", "SLPR")]
         parts += ([f"W{matchup.get('week', self.current_week)}"] if self.show_week_header else [])
         parts += ([f"{index + 1}/{len(self.matchups)}"] if self.show_matchup_number else [])
-        # BDF y coordinates are baselines. A baseline of 5 clips the top of the
-        # 7x13 header font; 13 keeps the full glyph inside a 48px panel.
-        self._draw_centered("  ".join(parts) or "SLEEPER", 13, "header", self.header_color)
+        # Keep the compact yellow header clear of the first 10x20 score row.
+        self._draw_centered("  ".join(parts) or "SLEEPER", 8, "header", self.header_color)
         # Fixed LED fonts make scores genuinely larger on 96x48 panels.
         for team, y in ((team_a, height * 0.40), (team_b, height * 0.82)):
             score = f"{team['points']:.1f}"
@@ -320,7 +319,7 @@ class SleeperScoreboardPlugin(BasePlugin):
                          "rows": self.standings[start:start + self.standings_rows]}
         selected = page_data["rows"]
         start = sum(len(item["rows"]) for item in self.standing_pages[:page] if item["league_label"] == page_data["league_label"])
-        self._draw_centered(f"{page_data['league_label']} STAND", 13, "header", self.header_color)
+        self._draw_centered(f"{page_data['league_label']} STAND", 8, "header", self.header_color)
         step = max(9, (height - 8) // max(1, len(selected)))
         for offset, row in enumerate(selected):
             record = f"{row['wins']}-{row['losses']}" + (f"-{row['ties']}" if row["ties"] else "")
